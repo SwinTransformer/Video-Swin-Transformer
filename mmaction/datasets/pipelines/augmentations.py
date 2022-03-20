@@ -5,8 +5,6 @@ from collections.abc import Sequence
 import mmcv
 import numpy as np
 from torch.nn.modules.utils import _pair
-import timm.data as tdata
-import torch
 
 from ..builder import PIPELINES
 
@@ -276,8 +274,7 @@ class Imgaug:
             self.aug = iaa.Sequential(
                 [self.imgaug_builder(t) for t in self.transforms])
 
-    @staticmethod
-    def default_transforms():
+    def default_transforms(self):
         """Default transforms for imgaug.
 
         Implement RandAugment by imgaug.
@@ -330,8 +327,8 @@ class Imgaug:
                         type='Cutout',
                         nb_iterations=1,
                         size=0.2 * cur_level,
-                        squared=True)
-                ])
+                        squared=True),
+                ]),
         ]
 
     def imgaug_builder(self, cfg):
@@ -421,41 +418,6 @@ class Imgaug:
                 ] for bbox in bbox_aug.items]
 
         results['img_shape'] = (img_h, img_w)
-
-        return results
-
-@PIPELINES.register_module()
-class RandomErasing(tdata.random_erasing.RandomErasing):
-    def __init__(self, device='cpu', **args):
-        super().__init__(device=device, **args)
-
-    def __call__(self, results):
-        in_type = results['imgs'][0].dtype.type
-
-        rand_state = random.getstate()
-        torchrand_state = torch.get_rng_state()
-        numpyrand_state = np.random.get_state()
-        # not using cuda to preserve the determiness
-
-        out_frame = []
-        for frame in results['imgs']:
-            random.setstate(rand_state)
-            torch.set_rng_state(torchrand_state)
-            np.random.set_state(numpyrand_state)
-            frame = super().__call__(torch.from_numpy(frame).permute(2, 0, 1)).permute(1, 2, 0).numpy()
-            out_frame.append(frame)
-
-        results['imgs'] = out_frame
-        img_h, img_w, _ = results['imgs'][0].shape
-
-        out_type = results['imgs'][0].dtype.type
-        assert in_type == out_type, \
-            ('Timmaug input dtype and output dtype are not the same. ',
-             f'Convert from {in_type} to {out_type}')
-
-        if 'gt_bboxes' in results:
-            raise NotImplementedError('only support recognition now')
-        assert results['img_shape'] == (img_h, img_w)
 
         return results
 
@@ -592,17 +554,14 @@ class RandomCrop:
         self.size = size
         self.lazy = lazy
 
-    @staticmethod
-    def _crop_kps(kps, crop_bbox):
+    def _crop_kps(self, kps, crop_bbox):
         return kps - crop_bbox[:2]
 
-    @staticmethod
-    def _crop_imgs(imgs, crop_bbox):
+    def _crop_imgs(self, imgs, crop_bbox):
         x1, y1, x2, y2 = crop_bbox
         return [img[y1:y2, x1:x2] for img in imgs]
 
-    @staticmethod
-    def _box_crop(box, crop_bbox):
+    def _box_crop(self, box, crop_bbox):
         """Crop the bounding boxes according to the crop_bbox.
 
         Args:
@@ -1110,12 +1069,10 @@ class Resize:
             for img in imgs
         ]
 
-    @staticmethod
-    def _resize_kps(kps, scale_factor):
+    def _resize_kps(self, kps, scale_factor):
         return kps * scale_factor
 
-    @staticmethod
-    def _box_resize(box, scale_factor):
+    def _box_resize(self, box, scale_factor):
         """Rescale the bounding boxes according to the scale_factor.
 
         Args:
@@ -1307,8 +1264,7 @@ class Flip:
             kpscores = kpscores[:, :, new_order]
         return kps, kpscores
 
-    @staticmethod
-    def _box_flip(box, img_width):
+    def _box_flip(self, box, img_width):
         """Flip the bounding boxes given the width of the image.
 
         Args:
