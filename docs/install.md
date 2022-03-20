@@ -48,8 +48,25 @@ conda install -y jpeg libtiff
 If mmcv and mmcv-full are both installed, there will be `ModuleNotFoundError`.
 
 ## Prepare environment
+- __*Method 1*__:
+  - This will create the necessary conda environment 
+  ```shell
+   conda env create -f environment.yml
+   conda activate swint
+   ```
+  based upon the path of python you can check this using 
+  ```shell
+    which python
+  ```
+  for example, it's ```/home/vidit/miniconda3/bin/python``` 
+  then run
+  ```shell
+  cp -r mmaction/ /home/vidit/miniconda3/lib/python3.7/site-packages/mmaction/
+  ```
+  #### i.e. just copy the path before ```bin``` in the path of python and add ```/lib/python3.7/site-packages/mmaction/``` to it.
+- __*Method 2*__:
 
-a. Create a conda virtual environment and activate it.
+    a. Create a conda virtual environment and activate it.
 
 ```shell
 conda create -n open-mmlab python=3.7 -y
@@ -158,17 +175,17 @@ Note:
 1. The git commit id will be written to the version number with step b, e.g. 0.6.0+2e7045c. The version will also be saved in trained models.
    It is recommended that you run step b each time you pull some updates from github. If C++/CUDA codes are modified, then this step is compulsory.
 
-2. Following the above instructions, MMAction2 is installed on `dev` mode, any local modifications made to the code will take effect without the need to reinstall it (unless you submit some commits and want to update the version number).
+   1. Following the above instructions, MMAction2 is installed on `dev` mode, any local modifications made to the code will take effect without the need to reinstall it (unless you submit some commits and want to update the version number).
 
-3. If you would like to use `opencv-python-headless` instead of `opencv-python`,
-   you can install it before installing MMCV.
+   2. If you would like to use `opencv-python-headless` instead of `opencv-python`,
+      you can install it before installing MMCV.
 
-4. If you would like to use `PyAV`, you can install it with `conda install av -c conda-forge -y`.
+   3. If you would like to use `PyAV`, you can install it with `conda install av -c conda-forge -y`.
 
-5. Some dependencies are optional. Running `python setup.py develop` will only install the minimum runtime requirements.
-   To use optional dependencies like `decord`, either install them with `pip install -r requirements/optional.txt`
-   or specify desired extras when calling `pip` (e.g. `pip install -v -e .[optional]`,
-   valid keys for the `[optional]` field are `all`, `tests`, `build`, and `optional`) like `pip install -v -e .[tests,build]`.
+   4. Some dependencies are optional. Running `python setup.py develop` will only install the minimum runtime requirements.
+      To use optional dependencies like `decord`, either install them with `pip install -r requirements/optional.txt`
+      or specify desired extras when calling `pip` (e.g. `pip install -v -e .[optional]`,
+      valid keys for the `[optional]` field are `all`, `tests`, `build`, and `optional`) like `pip install -v -e .[tests,build]`.
 
 ## Install with CPU only
 

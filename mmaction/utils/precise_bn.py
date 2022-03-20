@@ -30,7 +30,10 @@ def is_parallel_module(module):
     """
     parallels = (DataParallel, DistributedDataParallel,
                  MMDistributedDataParallel)
-    return bool(isinstance(module, parallels))
+    if isinstance(module, parallels):
+        return True
+    else:
+        return False
 
 
 @torch.no_grad()

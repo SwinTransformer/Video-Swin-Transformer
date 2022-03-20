@@ -146,8 +146,7 @@ class PoseDecode:
     applicable).
     """
 
-    @staticmethod
-    def _load_kp(kp, frame_inds):
+    def _load_kp(self, kp, frame_inds):
         """Load keypoints given frame indices.
 
         Args:
@@ -157,8 +156,7 @@ class PoseDecode:
 
         return [x[frame_inds].astype(np.float32) for x in kp]
 
-    @staticmethod
-    def _load_kpscore(kpscore, frame_inds):
+    def _load_kpscore(self, kpscore, frame_inds):
         """Load keypoint scores given frame indices.
 
         Args:
@@ -191,7 +189,7 @@ class PoseDecode:
         return results
 
     def __repr__(self):
-        repr_str = f'{self.__class__.__name__}()'
+        repr_str = (f'{self.__class__.__name__}()')
         return repr_str
 
 

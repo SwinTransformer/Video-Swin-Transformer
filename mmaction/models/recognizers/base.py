@@ -124,11 +124,11 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
         """Initialize the model network weights."""
         if self.backbone_from in ['mmcls', 'mmaction2']:
             self.backbone.init_weights()
-        elif self.backbone_from in ['torchvision', 'timm']:
+        elif self.backbone_from == 'torchvision':
             warnings.warn('We do not initialize weights for backbones in '
-                          f'{self.backbone_from}, since the weights for '
-                          f'backbones in {self.backbone_from} are initialized'
-                          'in their __init__ functions.')
+                          'torchvision, since the weights for backbones in '
+                          'torchvision are initialized in their __init__ '
+                          'functions. ')
         else:
             raise NotImplementedError('Unsupported backbone source '
                                       f'{self.backbone_from}!')
@@ -151,8 +151,6 @@ class BaseRecognizer(nn.Module, metaclass=ABCMeta):
         if (hasattr(self.backbone, 'features')
                 and self.backbone_from == 'torchvision'):
             x = self.backbone.features(imgs)
-        elif self.backbone_from == 'timm':
-            x = self.backbone.forward_features(imgs)
         else:
             x = self.backbone(imgs)
         return x

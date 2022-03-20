@@ -1,20 +1,15 @@
 import copy as cp
 import os.path as osp
-
 import torch
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import (DistSamplerSeedHook, EpochBasedRunner, OptimizerHook,
                          build_optimizer, get_dist_info)
 from mmcv.runner.hooks import Fp16OptimizerHook
-
 from ..core import (DistEvalHook, EvalHook, OmniSourceDistSamplerSeedHook,
                     OmniSourceRunner)
 from ..datasets import build_dataloader, build_dataset
 from ..utils import PreciseBNHook, get_root_logger
 from .test import multi_gpu_test
-from mmcv_custom.runner import EpochBasedRunnerAmp
-import apex
-import os.path as osp
 
 
 def train_model(model,
@@ -47,10 +42,8 @@ def train_model(model,
     # prepare data loaders
     dataset = dataset if isinstance(dataset, (list, tuple)) else [dataset]
 
-    if 'optimizer_config' not in cfg:
-        cfg.optimizer_config={}
     dataloader_setting = dict(
-        videos_per_gpu=cfg.data.get('videos_per_gpu', 1) // cfg.optimizer_config.get('update_interval', 1),
+        videos_per_gpu=cfg.data.get('videos_per_gpu', 1),
         workers_per_gpu=cfg.data.get('workers_per_gpu', 1),
         num_gpus=len(cfg.gpu_ids),
         dist=distributed,
@@ -80,24 +73,6 @@ def train_model(model,
             build_dataloader(ds, **dataloader_setting) for ds in dataset
         ]
 
-    # build runner
-    optimizer = build_optimizer(model, cfg.optimizer)
-    # use apex fp16 optimizer
-    # Noticed that this is just a temporary patch. We shoud not encourage this kind of code style
-    use_amp = False
-    if (
-        cfg.optimizer_config.get("type", None)
-        and cfg.optimizer_config["type"] == "DistOptimizerHook"
-    ):
-        if cfg.optimizer_config.get("use_fp16", False):
-            model, optimizer = apex.amp.initialize(
-                model.cuda(), optimizer, opt_level="O1"
-            )
-            for m in model.modules():
-                if hasattr(m, "fp16_enabled"):
-                    m.fp16_enabled = True
-            use_amp = True
-
     # put model on gpus
     if distributed:
         find_unused_parameters = cfg.get('find_unused_parameters', False)
@@ -112,23 +87,16 @@ def train_model(model,
         model = MMDataParallel(
             model.cuda(cfg.gpu_ids[0]), device_ids=cfg.gpu_ids)
 
-    if use_amp:
-        Runner = EpochBasedRunnerAmp
-        runner = Runner(
-            model,
-            optimizer=optimizer,
-            work_dir=cfg.work_dir,
-            logger=logger,
-            meta=meta,
-            amp=use_amp)
-    else:
-        Runner = OmniSourceRunner if cfg.omnisource else EpochBasedRunner
-        runner = Runner(
-            model,
-            optimizer=optimizer,
-            work_dir=cfg.work_dir,
-            logger=logger,
-            meta=meta)
+    # build runner
+    optimizer = build_optimizer(model, cfg.optimizer)
+
+    Runner = OmniSourceRunner if cfg.omnisource else EpochBasedRunner
+    runner = Runner(
+        model,
+        optimizer=optimizer,
+        work_dir=cfg.work_dir,
+        logger=logger,
+        meta=meta)
     # an ugly workaround to make .log and .log.json filenames the same
     runner.timestamp = timestamp
 
@@ -184,9 +152,7 @@ def train_model(model,
         runner.register_hook(eval_hook(val_dataloader, **eval_cfg))
 
     if cfg.resume_from:
-        runner.resume(cfg.resume_from, resume_amp=use_amp)
-    elif cfg.get("auto_resume", False) and osp.exists(osp.join(runner.work_dir, 'latest.pth')):
-        runner.auto_resume()
+        runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
     runner_kwargs = dict()
@@ -257,5 +223,5 @@ def train_model(model,
 
                 eval_res = test_dataset.evaluate(outputs, **eval_cfg)
                 runner.logger.info(f'Testing results of the {name} checkpoint')
-                for metric_name, val in eval_res.items():
-                    runner.logger.info(f'{metric_name}: {val:.04f}')
+                for name, val in eval_res.items():
+                    runner.logger.info(f'{name}: {val:.04f}')

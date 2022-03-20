@@ -12,7 +12,6 @@ from torch.nn.modules.utils import _pair
 
 from ...utils import get_random_string, get_shm_dir, get_thread_id
 from ..builder import PIPELINES
-import random
 
 
 @PIPELINES.register_module()
@@ -110,8 +109,7 @@ class SampleFrames:
                  twice_sample=False,
                  out_of_bound_opt='loop',
                  test_mode=False,
-                 start_index=None,
-                 frame_uniform=False):
+                 start_index=None):
 
         self.clip_len = clip_len
         self.frame_interval = frame_interval
@@ -120,7 +118,6 @@ class SampleFrames:
         self.twice_sample = twice_sample
         self.out_of_bound_opt = out_of_bound_opt
         self.test_mode = test_mode
-        self.frame_uniform = frame_uniform
         assert self.out_of_bound_opt in ['loop', 'repeat_last']
 
         if start_index is not None:
@@ -202,27 +199,6 @@ class SampleFrames:
 
         return clip_offsets
 
-    def get_seq_frames(self, num_frames):
-        """
-        Modified from https://github.com/facebookresearch/SlowFast/blob/64abcc90ccfdcbb11cf91d6e525bed60e92a8796/slowfast/datasets/ssv2.py#L159
-        Given the video index, return the list of sampled frame indexes.
-        Args:
-            num_frames (int): Total number of frame in the video.
-        Returns:
-            seq (list): the indexes of frames of sampled from the video.
-        """
-        seg_size = float(num_frames - 1) / self.clip_len
-        seq = []
-        for i in range(self.clip_len):
-            start = int(np.round(seg_size * i))
-            end = int(np.round(seg_size * (i + 1)))
-            if not self.test_mode:
-                seq.append(random.randint(start, end))
-            else:
-                seq.append((start + end) // 2)
-
-        return np.array(seq)
-
     def __call__(self, results):
         """Perform the SampleFrames loading.
 
@@ -231,35 +207,31 @@ class SampleFrames:
                 to the next transform in pipeline.
         """
         total_frames = results['total_frames']
-        if self.frame_uniform:  # sthv2 sampling strategy
-            assert results['start_index'] == 0
-            frame_inds = self.get_seq_frames(total_frames)
+
+        clip_offsets = self._sample_clips(total_frames)
+        frame_inds = clip_offsets[:, None] + np.arange(
+            self.clip_len)[None, :] * self.frame_interval
+        frame_inds = np.concatenate(frame_inds)
+
+        if self.temporal_jitter:
+            perframe_offsets = np.random.randint(
+                self.frame_interval, size=len(frame_inds))
+            frame_inds += perframe_offsets
+
+        frame_inds = frame_inds.reshape((-1, self.clip_len))
+        if self.out_of_bound_opt == 'loop':
+            frame_inds = np.mod(frame_inds, total_frames)
+        elif self.out_of_bound_opt == 'repeat_last':
+            safe_inds = frame_inds < total_frames
+            unsafe_inds = 1 - safe_inds
+            last_ind = np.max(safe_inds * frame_inds, axis=1)
+            new_inds = (safe_inds * frame_inds + (unsafe_inds.T * last_ind).T)
+            frame_inds = new_inds
         else:
-            clip_offsets = self._sample_clips(total_frames)
-            frame_inds = clip_offsets[:, None] + np.arange(
-                self.clip_len)[None, :] * self.frame_interval
-            frame_inds = np.concatenate(frame_inds)
+            raise ValueError('Illegal out_of_bound option.')
 
-            if self.temporal_jitter:
-                perframe_offsets = np.random.randint(
-                    self.frame_interval, size=len(frame_inds))
-                frame_inds += perframe_offsets
-
-            frame_inds = frame_inds.reshape((-1, self.clip_len))
-            if self.out_of_bound_opt == 'loop':
-                frame_inds = np.mod(frame_inds, total_frames)
-            elif self.out_of_bound_opt == 'repeat_last':
-                safe_inds = frame_inds < total_frames
-                unsafe_inds = 1 - safe_inds
-                last_ind = np.max(safe_inds * frame_inds, axis=1)
-                new_inds = (safe_inds * frame_inds + (unsafe_inds.T * last_ind).T)
-                frame_inds = new_inds
-            else:
-                raise ValueError('Illegal out_of_bound option.')
-
-            start_index = results['start_index']
-            frame_inds = np.concatenate(frame_inds) + start_index
-
+        start_index = results['start_index']
+        frame_inds = np.concatenate(frame_inds) + start_index
         results['frame_inds'] = frame_inds.astype(np.int)
         results['clip_len'] = self.clip_len
         results['frame_interval'] = self.frame_interval

@@ -14,7 +14,7 @@ except (ImportError, ModuleNotFoundError):
     lmdb_imported = False
 
 
-class LFB:
+class LFB(object):
     """Long-Term Feature Bank (LFB).
 
     LFB is proposed in `Long-Term Feature Banks for Detailed Video
